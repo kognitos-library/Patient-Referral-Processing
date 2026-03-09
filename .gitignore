@@ -3,5 +3,7 @@ node_modules/
 .next/
 packages/*/node_modules/
 *.tgz
+!kognitos-lattice-*.tgz
 supabase/.temp/
 tsconfig.tsbuildinfo
+.vercel
