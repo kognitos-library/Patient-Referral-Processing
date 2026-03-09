@@ -3,7 +3,7 @@ import { req, ORG_ID, WORKSPACE_ID, AUTOMATION_ID } from "@/lib/kognitos";
 let cachedCode: string | null = null;
 
 async function getAutomationCode(): Promise<string> {
-  if (cachedCode) return cachedCode;
+  if (cachedCode !== null) return cachedCode;
   try {
     const res = await req(
       `/organizations/${ORG_ID}/workspaces/${WORKSPACE_ID}/automations/${AUTOMATION_ID}`
@@ -13,7 +13,7 @@ async function getAutomationCode(): Promise<string> {
       cachedCode = data.english_code ?? "";
     }
   } catch {
-    cachedCode = "";
+    /* don't cache failures — allow retry on next request */
   }
   return cachedCode ?? "";
 }

@@ -21,7 +21,7 @@ export interface ToolCallData {
 }
 
 export interface ChatStreamEvent {
-  type: "text" | "tool_use" | "tool_result" | "done" | "error";
+  type: "text" | "tool_use" | "tool_result" | "done" | "error" | "title";
   content?: string;
   tool_name?: string;
   tool_input?: Record<string, unknown>;

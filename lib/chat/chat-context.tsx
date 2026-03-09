@@ -121,6 +121,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         });
 
         if (!res.ok || !res.body) {
+          setError(`Failed to send message (${res.status})`);
           setIsSending(false);
           return;
         }
@@ -172,8 +173,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           };
           setMessages((prev) => [...prev, assistantMsg]);
         }
-      } catch {
-        /* network error */
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Network error");
       } finally {
         setIsSending(false);
         setStreamingContent("");

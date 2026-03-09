@@ -137,8 +137,14 @@ export async function POST(request: Request) {
   const encoder = new TextEncoder();
   const responseStream = new ReadableStream({
     async start(controller) {
+      let streamClosed = false;
       const send = (data: Record<string, unknown>) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        if (streamClosed) return;
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        } catch {
+          streamClosed = true;
+        }
       };
 
       try {
@@ -175,7 +181,12 @@ export async function POST(request: Request) {
           const toolResults: Anthropic.ToolResultBlockParam[] = [];
           for (const block of toolBlocks) {
             send({ type: "tool_use", tool_name: block.name, tool_input: block.input });
-            const result = await executeTool(block.name, block.input as Record<string, unknown>);
+            let result: string;
+            try {
+              result = await executeTool(block.name, block.input as Record<string, unknown>);
+            } catch (e) {
+              result = `Tool error: ${e instanceof Error ? e.message : "Unknown error"}`;
+            }
             send({ type: "tool_result", tool_name: block.name, content: result.slice(0, 200) + "..." });
             toolResults.push({ type: "tool_result", tool_use_id: block.id, content: result });
           }
@@ -188,10 +199,9 @@ export async function POST(request: Request) {
         }
 
         if (supabaseAdmin) {
-          const contentToStore = fullAssistantResponse || "(tool-only response)";
           await supabaseAdmin
             .from(TABLES.messages)
-            .insert({ session_id: sessionId, role: "assistant", content: contentToStore });
+            .insert({ session_id: sessionId, role: "assistant", content: fullAssistantResponse || "" });
         }
 
         // Generate title after first exchange
