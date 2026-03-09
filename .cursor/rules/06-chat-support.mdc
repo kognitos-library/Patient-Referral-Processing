@@ -10,12 +10,12 @@ alwaysApply: false
 
 ```
 Sidebar sessions list (client) ↔ useChat hook ↔ ChatProvider context
-  → POST /api/chat → Claude (Anthropic) with API tools → Kognitos REST API
-  → SSE stream back to client
+  → POST /api/chat → Claude (Anthropic) streaming with API tools → Kognitos REST API
+  → SSE stream back to client (token-by-token)
   → Messages persisted in Supabase
 ```
 
-Sessions and messages persist in Supabase. Claude answers questions using **registered API tools only** — it never runs arbitrary code. The chat UI lives at `/chat` with conversation history in the left sidebar.
+Sessions and messages persist in Supabase. Claude answers questions using **registered API tools only** — it never runs arbitrary code. The chat UI lives at `/chat` with conversation history always visible in the left sidebar.
 
 ## Registered Tools
 
@@ -46,10 +46,33 @@ To add a new tool, define an `Anthropic.Tool` in the `TOOLS` array in `app/api/c
 
 ## Supabase schema
 
-Tables are defined in `supabase/migrations/00000000000001_chat.sql`:
+### Table naming convention (CRITICAL)
 
-- **chat_sessions** — id, user_id, title, created_at, updated_at
-- **chat_messages** — id, session_id, role (user/assistant/tool), content, tool_call (jsonb), created_at
+Supabase tables must be **project-specific**, prefixed with the automation's slug (derived from the automation display name or ID). This prevents collisions when multiple apps share the same Supabase project.
+
+**Pattern:** `{automation_slug}_sessions` and `{automation_slug}_messages`
+
+Example: For the "Patient Referral Intake" automation → prefix is `patient_referral_processing`:
+- `patient_referral_processing_sessions`
+- `patient_referral_processing_messages`
+
+Store the table names as constants in `lib/supabase.ts`:
+
+```typescript
+export const TABLES = {
+  sessions: "{automation_slug}_sessions",
+  messages: "{automation_slug}_messages",
+} as const;
+```
+
+All API routes must reference `TABLES.sessions` and `TABLES.messages` — never hardcode generic table names like `chat_sessions` or `chat_messages`.
+
+### Schema structure
+
+Tables are defined in `supabase/migrations/`:
+
+- **{prefix}_sessions** — id, user_id, title, created_at, updated_at
+- **{prefix}_messages** — id, session_id, role (user/assistant/tool), content, tool_call (jsonb), created_at
 
 RLS is enabled with permissive policies. Cascade delete from sessions to messages.
 
@@ -68,11 +91,45 @@ RLS is enabled with permissive policies. Cascade delete from sessions to message
 | `app/chat/page.tsx` | Chat page: message bubbles with markdown, empty state, input |
 | `supabase/migrations/00000000000001_chat.sql` | Database schema for chat tables |
 
+## Streaming (CRITICAL)
+
+Use `anthropic.messages.stream()` — NOT `anthropic.messages.create()` — for real token-by-token streaming. The `.on("text", callback)` handler sends each token as an SSE event immediately:
+
+```typescript
+const stream = anthropic.messages.stream({ model, max_tokens, system, tools, messages });
+stream.on("text", (text) => {
+  fullResponse += text;
+  send({ type: "text", content: text });
+});
+const finalMessage = await stream.finalMessage();
+```
+
+### Tool loop newline separator
+
+When Claude calls tools and then continues with more text, the pre-tool and post-tool text gets concatenated without any break. Add a `\n\n` separator between tool loop iterations:
+
+```typescript
+if (iteration > 0 && fullResponse.length > 0) {
+  fullResponse += "\n\n";
+  send({ type: "text", content: "\n\n" });
+}
+```
+
 ## UI integration
 
-Chat sessions are listed in the app sidebar (under the "Chat" nav item) via `ChatProvider` context in `app/layout.tsx`. The sidebar shows sessions only when on `/chat`. Clicking "Chat" when already on the page creates a new conversation.
+Chat sessions are **always visible** in the app sidebar (under the "Chat History" group) via `ChatProvider` context in `app/layout.tsx` — they render on every page, not just `/chat`. Clicking a session navigates to `/chat` and loads that conversation.
 
-The chat page uses plain divs (not PageLayout/PageContent) to ensure the input stretches full width. Assistant messages render markdown via `react-markdown` with `remark-gfm`.
+### Session creation rules
+
+- Clicking "Chat" in the sidebar nav **only navigates** to `/chat` — it does NOT create a new session.
+- New sessions are created **only when the user sends a message** without an active session. The `sendMessage` function in `ChatProvider` handles this: `if (!sessionId) { sessionId = await createSession(); }`.
+- Never call `createSession()` from navigation click handlers.
+
+### Markdown rendering
+
+- Wrap assistant messages in `.chat-markdown` div and pass `textProps={{ level: "small" }}` to the Lattice `Markdown` component (see `04-lattice-ui.mdc` Chat Markdown Sizing).
+- Do NOT use Tailwind `prose` / `prose-sm` wrappers — they conflict with Lattice's own typography components.
+- For user message bubbles (`bg-primary`), apply `className="text-primary-foreground"` directly on the `Text` component to prevent dark mode color inheritance issues (see `04-lattice-ui.mdc` Dark Mode Gotchas).
 
 ## Customizing for a new app
 

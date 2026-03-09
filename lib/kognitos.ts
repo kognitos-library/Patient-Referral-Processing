@@ -2,14 +2,13 @@ const TOKEN = process.env.KOGNITOS_TOKEN;
 const ORG_ID = process.env.KOGNITOS_ORG_ID;
 const WORKSPACE_ID = process.env.KOGNITOS_WORKSPACE_ID;
 const BASE_URL = process.env.KOGNITOS_BASE_URL;
-const AUTOMATION_ID = process.env.KOGNITOS_AUTOMATION_ID;
+const AUTOMATION_ID = process.env.KOGNITOS_AUTOMATION_ID || undefined;
 
 const required = {
   KOGNITOS_TOKEN: TOKEN,
   KOGNITOS_ORG_ID: ORG_ID,
   KOGNITOS_WORKSPACE_ID: WORKSPACE_ID,
   KOGNITOS_BASE_URL: BASE_URL,
-  KOGNITOS_AUTOMATION_ID: AUTOMATION_ID,
 } as const;
 
 for (const [name, value] of Object.entries(required)) {
