@@ -12,6 +12,7 @@ interface ChatContextValue {
   isLoadingMessages: boolean;
   isSending: boolean;
   streamingContent: string;
+  error: string | null;
   createSession: () => Promise<string | null>;
   sendMessage: (content: string) => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
@@ -33,6 +34,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [streamingContent, setStreamingContent] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -109,6 +111,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setMessages((prev) => [...prev, userMsg]);
       setIsSending(true);
       setStreamingContent("");
+      setError(null);
 
       try {
         const res = await fetch("/api/chat", {
@@ -149,6 +152,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                 setSessions((prev) =>
                   prev.map((s) => (s.id === sessionId ? { ...s, title } : s))
                 );
+              } else if (event.type === "error") {
+                console.error("[chat] Server error:", event.content);
+                setError(event.content ?? "Something went wrong");
               }
             } catch {
               /* skip malformed */
@@ -203,6 +209,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         isLoadingMessages,
         isSending,
         streamingContent,
+        error,
         createSession,
         sendMessage,
         deleteSession,

@@ -117,9 +117,18 @@ export async function POST(request: Request) {
       .eq("session_id", sessionId)
       .order("created_at", { ascending: true });
     if (dbMessages) {
-      existingMessages = dbMessages
+      const filtered = dbMessages
         .filter((m) => m.role === "user" || m.role === "assistant")
         .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+
+      for (const msg of filtered) {
+        const last = existingMessages[existingMessages.length - 1];
+        if (last && last.role === msg.role) {
+          last.content = last.content + "\n\n" + msg.content;
+        } else {
+          existingMessages.push(msg);
+        }
+      }
     }
   } else {
     existingMessages = [{ role: "user", content: message }];
@@ -178,10 +187,11 @@ export async function POST(request: Request) {
           ];
         }
 
-        if (supabaseAdmin && fullAssistantResponse) {
+        if (supabaseAdmin) {
+          const contentToStore = fullAssistantResponse || "(tool-only response)";
           await supabaseAdmin
             .from(TABLES.messages)
-            .insert({ session_id: sessionId, role: "assistant", content: fullAssistantResponse });
+            .insert({ session_id: sessionId, role: "assistant", content: contentToStore });
         }
 
         // Generate title after first exchange
@@ -207,7 +217,10 @@ export async function POST(request: Request) {
 
         send({ type: "done" });
       } catch (err) {
-        send({ type: "error", content: err instanceof Error ? err.message : "Unknown error" });
+        console.error("[chat] Stream error:", err);
+        try {
+          send({ type: "error", content: err instanceof Error ? err.message : "Unknown error" });
+        } catch { /* controller may be closed */ }
       } finally {
         controller.close();
       }

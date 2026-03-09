@@ -24,6 +24,7 @@ export default function ChatPage() {
     isLoadingMessages,
     isSending,
     streamingContent,
+    error,
     sendMessage,
     activeSessionId,
     createSession,
@@ -130,7 +131,7 @@ export default function ChatPage() {
               </div>
             )}
 
-            {isSending && !streamingContent && (
+            {isSending && !streamingContent && !error && (
               <div className="flex justify-start">
                 <div className="rounded-lg px-4 py-3 bg-muted">
                   <div className="flex items-center gap-2">
@@ -143,6 +144,14 @@ export default function ChatPage() {
                       Thinking...
                     </Text>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div className="flex justify-start">
+                <div className="rounded-lg px-4 py-3 bg-destructive/10 border border-destructive/20">
+                  <Text level="small" className="text-destructive">{error}</Text>
                 </div>
               </div>
             )}
